@@ -6,6 +6,9 @@
 #include <vector>
 #include <string>
 
+// Simple global state for the client
+static std::vector<std::string> current_map;
+
 extern int rows;         // The count of rows of the game map.
 extern int columns;      // The count of columns of the game map.
 extern int total_mines;  // The count of mines of the game map.
@@ -39,6 +42,7 @@ void InitGame() {
   // TODO (student): Initialize all your global variables!
   int first_row, first_column;
   std::cin >> first_row >> first_column;
+  current_map.assign(rows, std::string(columns, '?'));
   Execute(first_row, first_column, 0);
 }
 
@@ -53,15 +57,13 @@ void InitGame() {
  *     01?
  */
 void ReadMap() {
-  // Simple reader: consume the current board to keep input in sync.
-  // Store minimal information if needed by Decide later.
-  static std::vector<std::string> last_map;
-  last_map.clear();
-  last_map.reserve(rows);
+  // Read the current board into global storage.
+  current_map.clear();
+  current_map.reserve(rows);
   std::string line;
   for (int i = 0; i < rows; ++i) {
     std::cin >> line;
-    last_map.push_back(line);
+    current_map.push_back(line);
   }
 }
 
@@ -72,18 +74,31 @@ void ReadMap() {
  * mind and make your decision here! Caution: you can only execute once in this function.
  */
 void Decide() {
-  // Rubbish baseline: pick the first unknown cell and click it.
-  // Maintain a simple static visited mask to avoid repeating same cell.
-  static bool inited = false;
-  static std::vector<std::vector<bool>> tried;
-  if (!inited) {
-    tried.assign(rows, std::vector<bool>(columns, false));
-    inited = true;
+  // Baseline heuristic:
+  // 1) If there is a revealed '0' cell, click one of its '?' neighbors (safe expansion).
+  // 2) Otherwise click the first '?' on the board.
+  auto in_bounds_local = [&](int r, int c) {
+    return r >= 0 && r < rows && c >= 0 && c < columns;
+  };
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < columns; ++j) {
+      if (current_map[i][j] == '0') {
+        for (int di = -1; di <= 1; ++di) {
+          for (int dj = -1; dj <= 1; ++dj) {
+            if (di == 0 && dj == 0) continue;
+            int ni = i + di, nj = j + dj;
+            if (in_bounds_local(ni, nj) && current_map[ni][nj] == '?') {
+              Execute(ni, nj, 0);
+              return;
+            }
+          }
+        }
+      }
+    }
   }
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < columns; ++j) {
-      if (!tried[i][j]) {
-        tried[i][j] = true;
+      if (current_map[i][j] == '?') {
         Execute(i, j, 0);
         return;
       }
