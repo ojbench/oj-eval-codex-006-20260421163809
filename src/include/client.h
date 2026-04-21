@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 #include <string>
+#include <limits>
 
 // Simple global state for the client
 static std::vector<std::string> current_map;
@@ -136,14 +137,75 @@ void Decide() {
     }
   }
 
-  // D) Fallback: click the first unknown
+  // D) Smarter fallback: choose a '?' adjacent to numbers, preferring near '0's, else minimal risk proxy.
+  int cand_r = -1, cand_c = -1;
+  // D1: any '?' adjacent to a zero
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < columns; ++j) {
-      if (current_map[i][j] == '?') {
-        Execute(i, j, 0);
-        return;
+      if (current_map[i][j] != '?') continue;
+      bool near_zero = false;
+      for (int di = -1; di <= 1 && !near_zero; ++di) {
+        for (int dj = -1; dj <= 1 && !near_zero; ++dj) {
+          if (di == 0 && dj == 0) continue;
+          int ni = i + di, nj = j + dj;
+          if (in_bounds_local(ni, nj) && current_map[ni][nj] == '0') near_zero = true;
+        }
+      }
+      if (near_zero) { cand_r = i; cand_c = j; goto FALLBACK_CHOSEN; }
+    }
+  }
+  // D2: minimize simple risk proxy accumulated from adjacent numbers
+  {
+    double best_score = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < rows; ++i) {
+      for (int j = 0; j < columns; ++j) {
+        if (current_map[i][j] != '?') continue;
+        bool has_num_neighbor = false;
+        double score = 0.0;
+        for (int di = -1; di <= 1; ++di) {
+          for (int dj = -1; dj <= 1; ++dj) {
+            if (di == 0 && dj == 0) continue;
+            int ni = i + di, nj = j + dj;
+            if (!in_bounds_local(ni, nj)) continue;
+            char ch = current_map[ni][nj];
+            if (ch >= '0' && ch <= '8') {
+              has_num_neighbor = true;
+              int k = ch - '0';
+              int unknown = 0, marked = 0;
+              for (int di2 = -1; di2 <= 1; ++di2) {
+                for (int dj2 = -1; dj2 <= 1; ++dj2) {
+                  if (di2 == 0 && dj2 == 0) continue;
+                  int nni = ni + di2, nnj = nj + dj2;
+                  if (!in_bounds_local(nni, nnj)) continue;
+                  if (current_map[nni][nnj] == '?') ++unknown;
+                  else if (current_map[nni][nnj] == '@') ++marked;
+                }
+              }
+              int rem = k - marked;
+              if (rem <= 0) continue; // already handled by auto-explore earlier
+              if (unknown > 0) score += static_cast<double>(rem) / unknown;
+            }
+          }
+        }
+        if (has_num_neighbor && score < best_score) {
+          best_score = score;
+          cand_r = i; cand_c = j;
+        }
       }
     }
+    if (cand_r != -1) goto FALLBACK_CHOSEN;
+  }
+  // D3: truly any '?'
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < columns; ++j) {
+      if (current_map[i][j] == '?') { cand_r = i; cand_c = j; goto FALLBACK_CHOSEN; }
+    }
+  }
+
+FALLBACK_CHOSEN:
+  if (cand_r != -1) {
+    Execute(cand_r, cand_c, 0);
+    return;
   }
 }
 
