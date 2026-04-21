@@ -74,12 +74,51 @@ void ReadMap() {
  * mind and make your decision here! Caution: you can only execute once in this function.
  */
 void Decide() {
-  // Baseline heuristic:
-  // 1) If there is a revealed '0' cell, click one of its '?' neighbors (safe expansion).
-  // 2) Otherwise click the first '?' on the board.
-  auto in_bounds_local = [&](int r, int c) {
-    return r >= 0 && r < rows && c >= 0 && c < columns;
-  };
+  // Baseline1-style heuristic (single action per call):
+  // A) If a number cell has (k - marked) == unknown and unknown>0, mark one unknown neighbor as a mine.
+  // B) If a number cell has marked == k and unknown>0, auto-explore around it.
+  // C) Else if there is a revealed '0', click one of its '?' neighbors.
+  // D) Else click the first '?'.
+  auto in_bounds_local = [&](int r, int c) { return r >= 0 && r < rows && c >= 0 && c < columns; };
+
+  // Gather candidates for A and B
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < columns; ++j) {
+      char ch = current_map[i][j];
+      if (ch >= '0' && ch <= '8') {
+        int k = ch - '0';
+        int unknown = 0, marked = 0;
+        int first_unknown_r = -1, first_unknown_c = -1;
+        for (int di = -1; di <= 1; ++di) {
+          for (int dj = -1; dj <= 1; ++dj) {
+            if (di == 0 && dj == 0) continue;
+            int ni = i + di, nj = j + dj;
+            if (!in_bounds_local(ni, nj)) continue;
+            if (current_map[ni][nj] == '?') {
+              if (first_unknown_r == -1) { first_unknown_r = ni; first_unknown_c = nj; }
+              ++unknown;
+            } else if (current_map[ni][nj] == '@') {
+              ++marked;
+            }
+          }
+        }
+        if (unknown > 0) {
+          if (k - marked == unknown) {
+            // All unknown neighbors are mines: mark one
+            Execute(first_unknown_r, first_unknown_c, 1);
+            return;
+          }
+          if (marked == k) {
+            // All unknown neighbors are safe: auto-explore this number cell
+            Execute(i, j, 2);
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // C) Expand near zeros
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < columns; ++j) {
       if (current_map[i][j] == '0') {
@@ -96,6 +135,8 @@ void Decide() {
       }
     }
   }
+
+  // D) Fallback: click the first unknown
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < columns; ++j) {
       if (current_map[i][j] == '?') {
