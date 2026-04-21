@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <utility>
+#include <vector>
+#include <string>
 
 extern int rows;         // The count of rows of the game map.
 extern int columns;      // The count of columns of the game map.
@@ -51,7 +53,16 @@ void InitGame() {
  *     01?
  */
 void ReadMap() {
-  // TODO (student): Implement me!
+  // Simple reader: consume the current board to keep input in sync.
+  // Store minimal information if needed by Decide later.
+  static std::vector<std::string> last_map;
+  last_map.clear();
+  last_map.reserve(rows);
+  std::string line;
+  for (int i = 0; i < rows; ++i) {
+    std::cin >> line;
+    last_map.push_back(line);
+  }
 }
 
 /**
@@ -61,10 +72,23 @@ void ReadMap() {
  * mind and make your decision here! Caution: you can only execute once in this function.
  */
 void Decide() {
-  // TODO (student): Implement me!
-  // while (true) {
-  //   Execute(0, 0);
-  // }
+  // Rubbish baseline: pick the first unknown cell and click it.
+  // Maintain a simple static visited mask to avoid repeating same cell.
+  static bool inited = false;
+  static std::vector<std::vector<bool>> tried;
+  if (!inited) {
+    tried.assign(rows, std::vector<bool>(columns, false));
+    inited = true;
+  }
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < columns; ++j) {
+      if (!tried[i][j]) {
+        tried[i][j] = true;
+        Execute(i, j, 0);
+        return;
+      }
+    }
+  }
 }
 
 #endif
